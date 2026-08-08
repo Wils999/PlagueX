@@ -1,0 +1,147 @@
+import { validateRequest } from "@/app/auth";
+import prisma from "@/lib/prisma";
+import { BookLoader } from "@/components/ui/book-loader";
+import { Suspense } from "react";
+import UserAvatar from "./UserAvatar";
+import Link from "next/link";
+import { unstable_cache } from "next/cache";
+import { formatNumber } from "@/lib/utils";
+import FollowButton from "./FollowButton";
+import { getUserDataSelect } from "@/lib/types";
+import UserTooltip from "./UserTooltip";
+
+export default function TrendsSidebar() {
+  return (
+    <div className="sticky top-[5.25] hidden h-fit w-72 flex-none space-y-5 md:block lg:w-80">
+      <Suspense fallback={<BookLoader className="mx-auto" size="2rem" />}>
+        <WhoToFollow />
+      </Suspense>
+      <Suspense fallback={<BookLoader className="mx-auto" size="2rem" />}>
+        <TrendingTopics />
+      </Suspense>
+    </div>
+  );
+}
+
+async function WhoToFollow() {
+  const { user } = await validateRequest();
+
+  if (!user) return null;
+
+  const usersToFollow = await getCachedUsersToFollow(user.id);
+
+  return (
+    <div className="bg-card space-y-5 rounded-2xl p-5 shadow-sm">
+      <div className="text-xl font-bold">Who to follow</div>
+      {usersToFollow.map((suggestedUser) => (
+        <div
+          key={suggestedUser.id}
+          className="flex items-center justify-between gap-3"
+        >
+          <UserTooltip user={suggestedUser}>
+            <Link
+              href={`/users/${suggestedUser.username}`}
+              className="flex items-center gap-3"
+            >
+              <UserAvatar
+                avatarUrl={suggestedUser.avatarUrl}
+                className="flex-none"
+              />
+              <div>
+                <p className="line-clamp-1 font-semibold break-all hover:underline">
+                  {suggestedUser.displayName}
+                </p>
+                <p className="text-muted-foreground line-clamp-1 break-all">
+                  @{suggestedUser.username}
+                </p>
+              </div>
+            </Link>
+          </UserTooltip>
+
+          <FollowButton
+            userId={suggestedUser.id}
+            initialState={{
+              followers: suggestedUser._count.followers,
+              isFollowedByUser: suggestedUser.followers.some(
+                ({ followerId }) => followerId === suggestedUser.id,
+              ),
+            }}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function getCachedUsersToFollow(loggedInUserId: string) {
+  return unstable_cache(
+    async () => {
+      return prisma.user.findMany({
+        where: {
+          NOT: {
+            id: loggedInUserId,
+          },
+          followers: {
+            none: {
+              followerId: loggedInUserId,
+            },
+          },
+        },
+        select: getUserDataSelect(loggedInUserId),
+        take: 5,
+      });
+    },
+    [`who-to-follow-${loggedInUserId}`],
+    {
+      revalidate: 5 * 60, // Cache for 5 minutes
+    },
+  )();
+}
+
+const getTrendingTopics = unstable_cache(
+  async () => {
+    const result = await prisma.$queryRaw<{ hashtag: string; count: bigint }[]>`
+            SELECT LOWER(unnest(regexp_matches(content, '#[[:alnum:]_]+', 'g'))) AS hashtag, COUNT(*) AS count
+            FROM posts
+            GROUP BY (hashtag)
+            ORDER BY count DESC, hashtag ASC
+            LIMIT 5 
+        `;
+
+    return result.map((row) => ({
+      hashtag: row.hashtag,
+      count: Number(row.count),
+    }));
+  },
+  ["trending-topics"],
+  {
+    revalidate: 3 * 60 * 60,
+  },
+);
+
+async function TrendingTopics() {
+  const trendingTopics = await getTrendingTopics();
+
+  return (
+    <div className="bg-card space-y-5 rounded-2xl p-5 shadow-sm">
+      <div className="text-xl font-bold">Trending topics</div>
+      {trendingTopics.map(({ hashtag, count }) => {
+        const title = hashtag.split("#")[1];
+
+        return (
+          <Link key={title} href={`/hashtag/${title}`} className="block">
+            <p
+              className="line-clamp-1 font-semibold break-all hover:underline"
+              title={hashtag}
+            >
+              {hashtag}
+            </p>
+            <p className="text-muted-foreground text-sm">
+              {formatNumber(count)} {count === 1 ? "post" : "posts"}
+            </p>
+          </Link>
+        );
+      })}
+    </div>
+  );
+}

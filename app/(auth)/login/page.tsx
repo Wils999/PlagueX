@@ -1,0 +1,50 @@
+import { Metadata } from "next";
+import Image from "next/image";
+import LoginForm from "./LoginForm";
+import Link from "next/link";
+import loginImage from "@/public/images/welcome.png";
+import GoogleSignInButton from "./GoogleSignInButton";
+
+export const metadata: Metadata = {
+  title: " Login",
+  description: "Login to your account",
+};
+
+export default function Page() {
+  return (
+    <main className="flex min-h-svh items-center justify-center bg-gradient-to-br from-primary/10 via-background to-background p-0 sm:p-5">
+      <div className="bg-card flex min-h-svh w-full max-w-[64rem] overflow-hidden sm:min-h-0 sm:max-h-[40rem] sm:rounded-2xl sm:shadow-2xl">
+        <div className="w-full space-y-6 overflow-y-auto px-5 py-8 sm:space-y-8 sm:p-10 md:w-1/2">
+          <div className="mb-1 flex justify-center">
+            <Image
+              src="/images/PlagueXLogo.png"
+              alt="Logo"
+              width={320}
+              height={336}
+              priority
+            />
+          </div>
+          <h1 className="text-center text-2xl font-bold sm:text-3xl">Login to plagueX</h1>
+          <div className="space-y-5">
+            
+            <LoginForm />
+            <Link href="/signup" className="block text-center hover:underline">
+              Don&apos;t have an account? Sign up
+            </Link>
+            <div className="flex items-center gap-3">
+              <div className="h-px flex-1 bg-muted"/>
+              <span>OR</span>
+              <div className="h-px flex-1 bg-muted"/>
+            </div>
+            <GoogleSignInButton />
+          </div>
+        </div>
+        <Image
+          src={loginImage}
+          alt=""
+          className="hidden w-1/2 object-cover md:block"
+        />
+      </div>
+    </main>
+  );
+}
